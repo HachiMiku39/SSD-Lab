@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+*.app/
+*.zip
+.build/
+dist/
+tools/fio
+tools/smartctl
+*.log

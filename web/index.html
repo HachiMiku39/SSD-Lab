@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SSD Lab · 存储性能工作台</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/glass.css">
+  <script src="/appearance.js"></script><script src="/locales.js" defer></script><script src="/i18n.js" defer></script>
+  <script src="/app.js" defer></script><script src="/scatter.js" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="#benchmark"><img src="/icon.svg" alt=""><span>SSD<span class="brand-light"> Lab</span></span></a>
+    <div class="brand-caption">STORAGE WORKBENCH</div>
+    <div class="nav-label">工作台</div>
+    <nav aria-label="主导航">
+      <button class="nav-item active" data-page="benchmark"><span class="nav-icon">▥</span>性能测试<span class="nav-dot"></span></button>
+      <button class="nav-item" data-page="plots"><span class="nav-icon">⠿</span>散点分析</button>
+      <button class="nav-item" data-page="smart"><span class="nav-icon">♡</span>磁盘健康</button>
+      <button class="nav-item" data-page="history"><span class="nav-icon">◷</span>测试记录</button>
+      <button class="nav-item" data-page="methodology"><span class="nav-icon">≡</span>测试方法</button>
+      <button class="nav-item" data-page="settings"><span class="nav-icon">⚙</span>工具设置</button>
+    </nav>
+    <div class="sidebar-note"><div class="mini-chip"><span></span>本机运行</div><p>了解每一次读写。<br>掌握每一块硬盘。</p><div class="side-rule"></div><span>FIO + SMARTMONTOOLS</span></div>
+    <div class="sidebar-bottom"><span class="status-dot"></span><span id="connection-label">正在连接</span><span class="version">v1.3</span></div>
+  </aside>
+  <main>
+    <header class="topbar"><span class="breadcrumb-group"><span class="breadcrumb">工作台</span><span class="slash">/</span><span id="current-page-name">性能测试</span></span><div class="topbar-right"><div class="theme-switch" role="group" aria-label="外观"><button data-theme-choice="light" aria-pressed="true" title="日间模式"><span class="theme-symbol">☀</span><span>日间</span></button><button data-theme-choice="dark" aria-pressed="false" title="夜间模式"><span class="theme-symbol">☾</span><span>夜间</span></button><button data-theme-choice="miku" aria-pressed="false" title="Miku 配色"><span class="miku-symbol"></span><span>Miku</span></button></div><label class="language-control"><span class="language-symbol" aria-hidden="true">◎</span><select id="language-select" aria-label="语言"><option value="en">English</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="es">Español</option></select></label><span id="platform-label">macOS</span></div></header>
+    <div class="workspace">
+      <section id="page-benchmark" class="page active">
+        <div class="page-heading"><div><div class="eyebrow">BENCHMARK</div><h1>让性能，<span>用数据说话。</span></h1><p>从连续传输到细小读写，全面了解你的 SSD。</p></div><button id="export-current" class="button secondary" disabled><span>↗</span>导出报告</button></div>
+        <div id="dependency-notice" class="notice hidden"><span class="notice-symbol">i</span><div><strong>准备好测试引擎</strong><p>未检测到 fio。请在工具设置中配置后开始测试。</p></div><button class="text-button" data-go="settings">前往设置 →</button></div>
+        <div class="test-layout">
+          <div class="test-main">
+            <div class="panel config-panel"><div class="panel-caption"><span>01</span>测试配置 <span class="caption-right">临时文件测试</span></div>
+              <div class="target-label"><label for="target-path">目标目录</label><span id="path-space">选择 SSD 上的一个目录</span></div>
+              <div class="path-control"><span class="folder-icon">▱</span><input id="target-path" type="text" spellcheck="false" placeholder="选择目录或输入绝对路径"><button id="pick-folder" aria-label="选择测试目录">选择目录</button></div>
+              <div class="config-grid">
+                <div><label for="profile">测试配置</label><select id="profile"><option value="standard">标准 · CDM 风格</option><option value="nvme">NVMe · 高并发</option><option value="qos">QoS · R70/W30</option></select></div>
+                <div><label for="size">测试文件</label><select id="size"><option value="64">64 MiB</option><option value="256">256 MiB</option><option value="1024" selected>1 GiB</option><option value="4096">4 GiB</option><option value="16384">16 GiB</option></select></div>
+                <div><label for="passes">测试轮数</label><select id="passes"><option value="1">1 轮</option><option value="2">2 轮</option><option value="3">3 轮</option><option value="5">5 轮</option></select></div>
+                <div><label for="duration">单项时长</label><select id="duration"><option value="1">1 秒</option><option value="3">3 秒</option><option value="5" selected>5 秒</option><option value="10">10 秒</option><option value="30">30 秒</option></select></div>
+              </div>
+              <div class="engine-grid"><div><label for="engine">I/O 引擎</label><select id="engine"><option value="auto">自动 · 按配置与平台</option><option value="posixaio">posixaio · POSIX 异步</option><option value="psync">psync · POSIX 同步</option><option value="sync">sync · read / write</option></select></div><div><label for="plot-mode">散点日志</label><select id="plot-mode"><option value="window">10 ms 窗口 · 默认</option><option value="per_io">逐 I/O · 每项上限 20 万次</option><option value="off">关闭采集</option></select></div></div><p class="logging-note">窗口点是窗口平均值；逐 I/O 模式可绘制文件偏移，关闭预热并在上限处提前结束。日志采集可能影响测量。</p>
+              <div class="config-footer"><label class="toggle-label"><input id="direct" type="checkbox" checked><span class="toggle"></span>Direct I/O<span class="help-label" title="绕过系统文件缓存；实际支持取决于文件系统与 I/O 引擎。">?</span></label><span id="estimated-time">约 48 秒 + 文件准备</span></div>
+            </div>
+            <div class="panel results-panel"><div class="results-toolbar"><div class="panel-caption"><span>02</span>读写性能</div><div class="segmented" aria-label="成绩单位"><button class="active" data-unit="mb_s">MB/s</button><button data-unit="iops">IOPS</button><button data-unit="latency_us">μs</button></div></div>
+              <div class="results-head"><span>测试项目</span><span>读取 <small>READ</small></span><span>写入 <small>WRITE</small></span></div>
+              <div id="result-rows"></div>
+              <div class="results-bottom"><span><span class="tiny-dot"></span><span id="result-hint">点击单项运行，或开始全部测试</span></span><span id="result-engine">fio engine</span></div>
+            </div>
+            <div class="run-controls"><button id="start-test" class="button primary"><span class="play-icon">▶</span>开始全部测试</button><button id="stop-test" class="button stop hidden">■ 停止测试</button><div><strong id="run-status">就绪</strong><span id="run-subtitle">选择目标目录后开始</span></div><span id="run-percent"></span></div><div class="progress-track"><div id="run-progress"></div></div>
+            <div class="footnote"><span>i</span>只在所选目录生成临时测试文件。测试前会写入准备数据，完成或停止后自动清理。</div>
+            <div id="run-error" class="notice error hidden"></div>
+          </div>
+          <aside class="context-rail">
+            <div class="panel drive-card"><div class="card-overline">TARGET STORAGE</div><div class="ssd-illustration"><div class="ssd-board"><div class="ssd-chip">SSD</div><div class="ssd-controller"></div><div class="ssd-contact"></div></div><div class="ssd-shadow"></div></div><h3 id="target-name">等待选择磁盘</h3><p id="target-description">选择目标 SSD 中的测试目录</p><div class="capacity-bar"><div id="capacity-fill"></div></div><div class="capacity-details"><span id="used-capacity">已用 —</span><span id="free-capacity">可用 —</span></div><div class="drive-card-divider"></div><div class="drive-stat"><span>测试方式</span><strong>普通文件 I/O</strong></div><div class="drive-stat"><span>缓存策略</span><strong id="cache-label">Direct I/O</strong></div><div class="drive-stat"><span>成绩策略</span><strong>每项保留最佳轮次</strong></div><button class="rail-link" data-go="smart">查看 SMART 信息 <span>↗</span></button></div>
+            <div class="insight-card"><div class="insight-icon">↗</div><h3>不止是传输速度</h3><p><strong>SEQ</strong> 反映大文件传输能力。<br><strong>RND 4K</strong> 更接近日常小文件读写。<br><strong>Q1T1</strong> 帮助观察低并发响应。</p><div class="insight-foot">相同条件下比较，才有意义。</div></div>
+          </aside>
+        </div>
+        <details class="panel log-panel"><summary>运行日志 <span id="log-count">0 条</span></summary><div id="log-content" class="log-content">尚无运行日志。</div></details>
+        <details class="panel log-panel qos-panel"><summary>逐轮结果与尾延迟 <span>总延迟 · μs</span></summary><p class="qos-note">保留每一轮，避免只看最佳成绩。P99.99 的尾部预计少于 10 个 I/O 时显示样本提示；这是本工具的提示规则，不代表统计置信度或规范认证。</p><div class="table-scroll"><table><thead><tr><th>项目 / 轮次</th><th>方向</th><th>MB/s</th><th>P50</th><th>P99</th><th>P99.9</th><th>P99.99</th><th>P99.999</th><th>最大</th><th>I/O 样本</th></tr></thead><tbody id="qos-rows"><tr><td colspan="10">尚无有效测试结果。</td></tr></tbody></table></div></details>
+      </section>
+      <section id="page-smart" class="page">
+        <div class="page-heading"><div><div class="eyebrow">DRIVE HEALTH</div><h1>每一块磁盘，<span>都值得关注。</span></h1><p>直接读取设备 SMART 信息，了解健康状态与使用情况。</p></div><button id="scan-smart" class="button primary">↻ 扫描设备</button></div>
+        <div class="panel smart-selection"><div><label for="smart-device">物理设备</label><select id="smart-device"><option value="">先扫描设备</option></select></div><button id="refresh-smart" class="button secondary" disabled>读取 SMART</button><label id="smart-admin-label" class="toggle-label"><input id="smart-admin" type="checkbox"><span class="toggle"></span>管理员权限</label><span id="smart-updated">按需读取 · 系统授权可选</span></div>
+        <div id="smart-message" class="notice"><span class="notice-symbol">i</span><div><strong>读取真实的磁盘健康信息</strong><p>需要 smartmontools。部分磁盘需管理员权限，部分 USB 转接器无法透传 SMART。</p></div></div>
+        <div id="smart-content" class="hidden">
+          <div class="health-grid"><div class="panel health-card"><div class="card-overline">HEALTH STATUS</div><div id="health-label" class="health-label">未知</div><div id="health-life" class="health-life">—<small>%</small></div><p id="health-detail">NVMe 估算剩余寿命</p></div><div class="panel temperature-card"><div class="card-overline">TEMPERATURE</div><div id="smart-temperature" class="metric-large">— <small>°C</small></div><p>设备报告的当前温度</p><div class="temperature-track"><div id="temperature-fill"></div></div></div><div class="panel identity-card"><div class="card-overline">DEVICE INFORMATION</div><h3 id="smart-model">—</h3><dl id="smart-identity"></dl></div></div>
+          <div class="usage-grid" id="smart-usage"></div>
+          <div class="panel attributes-panel"><div class="results-toolbar"><div class="panel-caption"><span>SMART</span>设备属性</div><button id="export-smart" class="text-button">导出原始 JSON ↗</button></div><div class="table-scroll"><table><thead><tr><th>标识</th><th>属性名称</th><th>当前值</th><th>最差值</th><th>阈值</th><th>原始值 / 单位</th></tr></thead><tbody id="smart-attributes"></tbody></table></div></div>
+          <details class="panel log-panel"><summary>原始 SMART JSON</summary><pre id="smart-raw"></pre></details>
+        </div>
+      </section>
+      <section id="page-plots" class="page">
+        <div class="page-heading"><div><div class="eyebrow">FIO SCATTER ANALYSIS</div><h1>每一个点，<span>都来自测量。</span></h1><p>自定义坐标轴、尺度、显示范围和读写筛选。文件偏移不是物理 LBA。</p></div><div class="plot-export"><button id="export-plot-png" class="button secondary">PNG ↗</button><button id="export-plot-csv" class="button secondary">CSV ↗</button></div></div>
+        <div class="panel plot-controls"><div><label for="plot-dataset">数据集</label><select id="plot-dataset"><option value="latency">延迟日志点</option><option value="flow">带宽 / IOPS 日志点</option><option value="summary">逐轮汇总指标</option></select></div><div><label for="plot-case">测试项目</label><select id="plot-case"><option value="all">全部项目</option></select></div><div><label for="plot-direction">方向</label><select id="plot-direction"><option value="all">读取 + 写入</option><option value="read">仅读取</option><option value="write">仅写入</option></select></div><div><label for="plot-x">横轴字段</label><select id="plot-x"></select></div><div><label for="plot-y">纵轴字段</label><select id="plot-y"></select></div><div><label for="plot-x-scale">横轴尺度</label><select id="plot-x-scale"><option value="linear">线性</option><option value="log">对数</option></select></div><div><label for="plot-y-scale">纵轴尺度</label><select id="plot-y-scale"><option value="linear">线性</option><option value="log">对数</option></select></div><div class="plot-range"><label>显示范围（留空自动）</label><div><input id="plot-x-min" type="number" placeholder="X 最小"><input id="plot-x-max" type="number" placeholder="X 最大"><input id="plot-y-min" type="number" placeholder="Y 最小"><input id="plot-y-max" type="number" placeholder="Y 最大"><button id="plot-reset" class="text-button">重置</button></div></div></div>
+        <div class="panel plot-panel"><div class="plot-meta"><span><i class="read-dot"></i>读取 <i class="write-dot"></i>写入</span><span id="plot-count">0 个点</span></div><div class="plot-canvas-wrap"><canvas id="scatter-canvas" role="img" aria-label="fio 测量散点图"></canvas><div id="plot-tooltip" class="plot-tooltip hidden"></div></div><p id="plot-description" class="plot-description">完成测试后可绘图。已有记录可从“测试记录”打开。</p></div>
+      </section>
+      <section id="page-history" class="page">
+        <div class="page-heading"><div><div class="eyebrow">TEST HISTORY</div><h1>每次测试，<span>都有迹可循。</span></h1><p>保存测试条件与原始结果，让前后表现可以比较。</p></div><button id="refresh-history" class="button secondary">↻ 刷新记录</button></div>
+        <div id="history-list"></div><div id="history-detail" class="hidden"></div>
+      </section>
+      <section id="page-settings" class="page">
+        <div class="page-heading"><div><div class="eyebrow">ENGINE SETTINGS</div><h1>小巧的界面，<span>专业的引擎。</span></h1><p>连接 fio 与 smartmontools，让每一项数据来自真实测量。</p></div></div>
+        <div class="panel appearance-panel"><div><h2>外观与语言</h2><p>顶部工具栏可切换三套主题与八种语言。偏好自动保存在本机，首次使用默认英语。</p></div><span class="appearance-swatches" aria-hidden="true"><i></i><i></i><i></i></span></div>
+        <div class="settings-grid"><div class="panel settings-panel"><div class="panel-caption"><span>01</span>工具路径</div><p class="settings-help">留空则自动查找 PATH、Homebrew 和应用 tools 目录。</p><label for="fio-path">fio 可执行文件</label><input id="fio-path" placeholder="自动检测，如 /opt/homebrew/bin/fio" spellcheck="false"><div id="fio-status" class="tool-status"></div><label for="smartctl-path">smartctl 可执行文件</label><input id="smartctl-path" placeholder="自动检测，如 /opt/homebrew/sbin/smartctl" spellcheck="false"><div id="smartctl-status" class="tool-status"></div><div class="settings-buttons"><button id="save-settings" class="button primary">保存并检查</button><button id="refresh-dependencies" class="button secondary">重新检测</button></div></div>
+          <div class="panel setup-panel"><div class="panel-caption"><span>02</span>安装工具</div><p>macOS · 已安装 Homebrew 时，在终端执行：</p><div class="code-copy"><code>brew install fio smartmontools</code><button id="copy-install" aria-label="复制安装命令">复制</button></div><p>安装后点击“重新检测”。Windows 和 Linux 的启动方式见软件随附说明。</p><div class="setup-divider"></div><h3>测试结果如何解读</h3><p>参考 CrystalDiskMark 的负载参数，执行引擎为 fio。不同引擎、系统和缓存策略会影响成绩，结果不保证与 CrystalDiskMark 一致。</p><p>Q 表示每个工作线程的请求队列深度，T 表示工作线程数。实际队列深度分布可在 JSON 报告中查看。</p><div class="source-links"><a href="https://fio.readthedocs.io/en/latest/fio_doc.html" target="_blank" rel="noreferrer">fio 文档 ↗</a><a href="https://www.smartmontools.org/" target="_blank" rel="noreferrer">smartmontools ↗</a></div></div></div>
+      </section>
+      <section id="page-methodology" class="page">
+        <div class="page-heading"><div><div class="eyebrow">METHODOLOGY & RESEARCH</div><h1>测试有依据，<span>结果有边界。</span></h1><p>整理三星、SK hynix 的公开资料与行业规范。资料核对日期：2026-10-13。</p></div></div>
+        <div class="notice"><span class="notice-symbol">i</span><div><strong>当前模式：文件级测量，设备稳态未验证</strong><p>所选目录的文件系统、系统 I/O 栈和 SSD 共同影响成绩。当前不执行设备清除或全盘预处理，也不宣称 SNIA / OCP 合规。</p></div></div>
+        <div class="panel methodology-panel"><h2>从厂商资料中能学到什么</h2><div class="table-scroll"><table><thead><tr><th>资料</th><th>公开的方法</th><th>对本工具的启发</th></tr></thead><tbody>
+          <tr><td><a href="https://semiconductor.samsung.com/resources/white-paper/PM863_White_Paper.pdf" target="_blank" rel="noreferrer">三星 PM863 白皮书 ↗</a></td><td>fio、混合负载、QD 扫描和 99.99% 延迟；多数项目先做设备写入预处理，顺序项目除外。</td><td>新增 R70/W30 队列扫描与尾延迟，完整保留原始 fio 输出。公开例子不能代表三星所有产品的内部验收流程。</td></tr>
+          <tr><td><a href="https://download.semiconductor.samsung.com/resources/data-sheet/Samsung_NVMe_SSD_990_PRO_Datasheet_Rev.1.0_10119997004809.pdf" target="_blank" rel="noreferrer">三星 990 PRO 数据表（2022）↗</a></td><td>指定 Iometer、主机和辅助盘条件；写性能启用 Intelligent TurboWrite。</td><td>报告记录测试条件；短时峰值不能直接当作缓存耗尽后的持续写入速度。</td></tr>
+          <tr><td><a href="https://news.skhynix.com/en/rulebreakers-revolutions-essd-virtualization-for-big-data/" target="_blank" rel="noreferrer">SK hynix eSSD 虚拟化资料 ↗</a></td><td>强调多个工作负载下的延迟和 I/O 一致性。</td><td>关注混合负载与干扰，而不是把一个纯读峰值当作整体性能。</td></tr>
+          <tr><td><a href="https://www.snia.org/sites/default/files/2025-02/SNIA-SSS-PTS-2.0.2.pdf" target="_blank" rel="noreferrer">SNIA SSS PTS 2.0.2（2020）↗</a></td><td>定义预处理、测量窗口、稳态判据、负载矩阵和报告要求。</td><td>正式设备级稳态需要完整前置流程；几轮短文件测试不足以判断设备达到稳态。</td></tr>
+          <tr><td><a href="https://www.opencompute.org/documents/datacenter-nvme-ssd-specification-v2-7-final-pdf-1/" target="_blank" rel="noreferrer">OCP Datacenter NVMe SSD 2.7 ↗</a></td><td>设备延迟监测和异常诊断；区分设备命令延迟与主机影响。</td><td>本工具显示 fio 主机侧总延迟，不把它冒充控制器内部延迟。</td></tr>
+        </tbody></table></div></div>
+        <div class="methodology-grid"><div class="panel methodology-panel"><h2>推荐先读的论文</h2>
+          <article><h3><a href="https://www.usenix.org/conference/atc19/presentation/kim-shine" target="_blank" rel="noreferrer">Practical Erase Suspension for Modern Low-latency SSDs ↗</a></h3><span>USENIX ATC 2019 · 含三星作者</span><p>研究擦除对尾延迟的影响，观察 4 KiB、70% 读 / 30% 写的混合负载。部分机制通过经实机校验的模拟器评估，不是厂内量产测试规范。</p></article>
+          <article><h3><a href="https://www.usenix.org/conference/hotstorage20/presentation/choi" target="_blank" rel="noreferrer">A New LSM-style Garbage Collection Scheme for ZNS SSDs ↗</a></h3><span>HotStorage 2020 · 含 SK hynix 作者</span><p>使用真实 ZNS 研究原型，考察利用率、更新分布和垃圾回收开销。其 ZNS 管理方法不能直接套用到普通消费级 SSD。</p></article>
+          <article><h3><a href="https://www.usenix.org/legacy/events/usenix08/tech/full_papers/agrawal/agrawal_html/index.html" target="_blank" rel="noreferrer">Design Tradeoffs for SSD Performance ↗</a></h3><span>USENIX ATC 2008 · 基础架构研究</span><p>理解内部并行、工作负载和清理行为为何共同决定性能。适合建立分析框架，不用于推断现代产品的具体速度。</p></article>
+          <article><h3><a href="https://arxiv.org/abs/2104.09611" target="_blank" rel="noreferrer">Reducing Solid-State Drive Read Latency by Optimizing Read-Retry ↗</a></h3><span>ASPLOS 2021 · NAND 读重试研究</span><p>从真实 NAND 芯片研究读重试。说明老化和保持时间可能影响读取延迟；普通 SMART 无法直接观察所有芯片内部机制。</p></article>
+        </div><div class="panel methodology-panel"><h2>当前支持与后续实验</h2><dl class="methodology-checks"><dt>已支持</dt><dd>纯读写、70/30 混合、QD1/4/16/32、真实尾延迟、逐轮结果、带宽中位数 / CV、原始命令、系统与容量条件。</dd><dt>尚未验证</dt><dd>设备级稳态、实际 PCIe 链路、设备内部延迟、功耗、数据保持与寿命认证。</dd><dt>持续写入曲线</dt><dd>后续使用足够大的工作范围与累计写入量，再结合温度和空闲恢复观察；不能仅凭一条速度下降曲线断言 SLC 缓存耗尽。</dd><dt>实验室稳态</dt><dd>独立空盘、专用测试平台与明确的清除 / 全盘预处理流程；需要和日常目录测试分开设计。</dd><dt>推荐记录</dt><dd>型号 / 固件、接口链路、文件系统 / 加密、剩余空间、温度、供电 / 散热、后台负载、预处理状态与工具版本。</dd></dl><p>本页“对本工具的启发”及实验建议是基于资料的工程推论，不是厂家对本软件的认证或背书。</p></div></div>
+      </section>
+      <footer class="workspace-footer"><span>SSD Lab</span><span>精确测量 · 清晰呈现</span><span>本地处理，数据由你掌控</span></footer>
+    </div>
+  </main>
+</div>
+<div id="toast" class="toast hidden" role="status"></div>
+</body></html>
