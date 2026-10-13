@@ -2,6 +2,17 @@
 
 一个 macOS SSD 性能与健康工具。默认英语界面，支持八种语言，使用真实 fio 执行文件读写测试，使用 smartctl 读取 SMART。参考 CrystalDiskMark 的负载参数与 CrystalDiskInfo 的信息展示方式，独立开发，与 Crystal Dew World 无隶属关系。
 
+## 1.3.1 Apple NAND 与 SMART 修正
+
+- 在系统公开字段的 Apple 内置 SSD 上，显示 NAND 供应商、原始供应商名称、NAND 描述及信息来源。通过只读 IOKit API 定位所选设备，并沿其父节点读取 `Controller Characteristics.vendor-name`，避免多盘连接时匹配错盘。
+- 支持显示三星、东芝／Kioxia、SK hynix、美光、YMTC、SanDisk 等系统报告的名称。这个名称映射不表示这些厂商都存在于 Apple 原厂配置中。不会通过 `AP…` 型号、PCI Vendor ID 或未经验证的 manufacturer-id 字节猜测供应商。未公开与读取失败分别显示。
+- 默认 SMART 读取改为 `smartctl -i -H -A -j`；附加错误日志需单独勾选读取。健康数据和附加日志分别保存，附加日志读取失败不改变健康检查结果，详细返回信息仍可查看。
+- SMART JSON 导出包含 `smartctl` 原始健康数据与 `ssd_lab` 扩展信息（NAND 来源、附加日志）。
+
+Apple SSD 出现 `Read 1 entries from Error Information Log failed … code=745` 时，“1”是尝试读取的条目数，不是已确认的磁盘错误数。745 对应 IOKit `kIOReturnDeviceError`（0xe00002e9），仅凭此通用错误码无法确定底层原因、权限不足或硬盘故障。健康检查、Critical Warning、介质错误计数仍需独立判断；软件保留真实告警与原始返回信息。
+
+调查依据：[Apple Silicon 实机 IORegistry 测量](https://github.com/ThomasKaiser/Knowledge/blob/master/articles/Exploring_Apple_Silicon_on_MacBookAir10.md)、[smartmontools 维护者对相同错误的说明](https://listi.jpberlin.de/pipermail/smartmontools-support/2022-November/000926.html)、[Apple IOReturn 定义](https://github.com/apple-oss-distributions/xnu/blob/main/iokit/IOKit/IOReturn.h)。该驱动字段不是稳定公开 API，能否读取取决于硬件与系统版本。
+
 ## 1.3 外观与多语言
 
 - 三套可即时切换的主题：日间、夜间、Miku（青绿与粉色）。主题和语言偏好保存在本机，初次运行默认英语与日间主题。

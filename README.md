@@ -6,7 +6,13 @@ A local SSD performance and health workbench for macOS, powered by **fio** and *
 
 ![Miku appearance](screenshots/miku.png)
 
-## What's new in 1.3
+## What's new in 1.3.1
+
+- Apple internal SSD NAND supplier, original vendor string, descriptor and source, when exposed by the selected device's IORegistry ancestry. The Apple device brand and PCI vendor ID are never used to guess the NAND supplier.
+- SMART health uses `smartctl -i -H -A -j`. The error information log is a separate, optional read. Its failure does not replace the drive's health result; original diagnostics remain available and exportable.
+- The SMART JSON export now contains the original health JSON under `smartctl` and app metadata/optional log output under `ssd_lab`.
+
+## Appearance and languages in 1.3
 
 - **Light, Dark and Miku themes**, with teal and pink accents in Miku.
 - Native **Liquid Glass on macOS 26/27**, with a material fallback on older systems. Navigation and controls use glass; tables and chart surfaces remain clear.
@@ -61,6 +67,14 @@ The app and ZIP are written beside the source folder. Runtime data is stored in 
 
 These are **file-level host measurements**, including the filesystem, I/O stack and SSD. This app does not erase drives, perform full-device preconditioning, verify device steady state, measure power, or claim SNIA / OCP compliance. Short write peaks do not establish cache-exhausted sustained write speed. SMART life estimates do not predict failures.
 
+### Apple NAND identity and optional logs
+
+On supported Apple internal SSDs, `Controller Characteristics.vendor-name` in IORegistry reports the NAND supplier. SSD Lab resolves the selected IOService path or BSD device and walks only its parents using read-only IOKit APIs. It displays the reported value, retaining its original spelling. Samsung, Toshiba/Kioxia, SK hynix, Micron, YMTC and SanDisk names are normalized for display; this is **not evidence that all of these vendors occur in factory Apple configurations**. Other reported names are preserved. Missing data shows “Not exposed by system”; access failure is distinguished as “Read unavailable”. The `AP…` model and manufacturer-ID bytes are not used to infer a supplier. This unpublished driver property can vary by hardware and macOS version.
+
+`smartctl -a` requests both the NVMe health log (0x02) and optional error log (0x01). Some Apple devices return valid health data while rejecting the latter. “Read 1 entries … failed” describes the requested entry count, not a confirmed error count. IOKit system 0x38/subsystem 0/code 745 is `kIOReturnDeviceError` (0xe00002e9), a generic failure; that code alone does not establish the underlying reason, lack of privileges, or drive failure. SSD Lab keeps optional-log diagnostics separate and does not hide critical warnings, failed health checks or missing health data.
+
+Evidence: [firsthand Apple Silicon IORegistry measurements](https://github.com/ThomasKaiser/Knowledge/blob/master/articles/Exploring_Apple_Silicon_on_MacBookAir10.md), [smartmontools maintainer's explanation of the same 745 error](https://listi.jpberlin.de/pipermail/smartmontools-support/2022-November/000926.html), [Apple IOReturn definitions](https://github.com/apple-oss-distributions/xnu/blob/main/iokit/IOKit/IOReturn.h). See the bundled smartmontools 7.5 source (`nvmeprint.cpp`, `os_darwin.cpp`, `smartctl.8.in`) for the independent reads and default options.
+
 The in-app Methodology page documents primary sources, including:
 
 - [Samsung PM863 white paper](https://semiconductor.samsung.com/resources/white-paper/PM863_White_Paper.pdf): fio, mixed workloads, queue sweeps and P99.99 latency.
@@ -73,4 +87,4 @@ The engineering implications are inferences from public research, not manufactur
 
 ## Licenses
 
-SSD Lab's own code is under the [MIT License](LICENSE). fio and smartmontools retain their respective upstream GPL licenses; corresponding source archives and license copies are included in the application bundle. This repository keeps the license copies in `third-party/`; `scripts/bootstrap_tools.py` downloads checksum-verified official source archives when needed. Bundled CPython retains the PSF license in its standard library. The source code does not include private benchmark reports, drive serial numbers or local session tokens.
+SSD Lab's own code is under the [MIT License](LICENSE). fio and smartmontools retain their respective upstream GPL licenses; corresponding source archives and license copies are in `third-party/` and included in the application bundle. Bundled CPython retains the PSF license in its standard library. The source code does not include private benchmark reports, drive serial numbers or local session tokens.

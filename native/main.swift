@@ -87,7 +87,7 @@ final class LabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     @objc func showAbout() {
         let alert = NSAlert()
-        alert.messageText = "SSD Lab 1.3"
+        alert.messageText = "SSD Lab 1.3.1"
         alert.informativeText = label("aboutDescription", "Local SSD performance and health workbench") + "\n\nfio 3.43 · smartmontools 7.5\n\n" + label("affiliation", "Independent project, not affiliated with Crystal Dew World.")
         alert.runModal()
     }

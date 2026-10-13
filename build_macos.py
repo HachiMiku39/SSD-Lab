@@ -41,7 +41,7 @@ if args.python_runtime:
     subprocess.run([str(runtime / "bin/python3"), "-B", "-c", "import http.server, json, threading, subprocess, pathlib, plistlib; print('Bundled Python OK')"], env=environment, check=True)
 plist = {
     "CFBundleName": "SSD Lab", "CFBundleDisplayName": "SSD Lab", "CFBundleExecutable": "SSD Lab",
-    "CFBundleIdentifier": "local.ssdlab.desktop", "CFBundleVersion": "4", "CFBundleShortVersionString": "1.3.0",
+    "CFBundleIdentifier": "local.ssdlab.desktop", "CFBundleVersion": "5", "CFBundleShortVersionString": "1.3.1",
     "CFBundlePackageType": "APPL", "LSMinimumSystemVersion": "13.0", "NSHighResolutionCapable": True,
     "NSAppTransportSecurity": {"NSAllowsLocalNetworking": True},
     "NSAppleEventsUsageDescription": "SSD Lab uses the system folder picker to select a test folder.",

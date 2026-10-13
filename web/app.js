@@ -129,12 +129,18 @@ async function scanSmart() {
 async function readSmart() {
   if(!$("smart-device").value) return;
   notice(t("正在读取 SMART 信息…"));
-  try {const data=await api("smart/read",{device:$("smart-device").value,elevated:$("smart-admin").checked}); currentSmart=data; renderSmart(data);}
+  try {const data=await api("smart/read",{device:$("smart-device").value,elevated:$("smart-admin").checked,error_log:$("smart-error-log").checked}); currentSmart=data; renderSmart(data);}
   catch(error) {$("smart-content").classList.add("hidden"); notice(t(error.message),true); throw error;}
 }
 function renderSmart(data) {
   $("smart-content").classList.remove("hidden");
-  if(data.messages.length) notice(data.messages.join(" · "),data.partial); else $("smart-message").classList.add("hidden");
+  const log=data.error_log||{status:"not_requested"};
+  if(data.messages.length) notice(data.messages.map(message=>t(message)).join(" · "),data.partial||!data.health_data_available);
+  else if(log.status==="failed") notice(t(data.health_data_available?"附加错误日志读取失败；SMART 健康数据已读出。仅凭此提示不能判定磁盘故障。":"附加错误日志读取失败；设备未提供健康数据。"),!data.health_data_available);
+  else $("smart-message").classList.add("hidden");
+  $("smart-diagnostics").classList.toggle("hidden",log.status==="not_requested");
+  $("smart-log-status").textContent=log.status==="failed"?t("附加错误日志读取失败；详细返回信息如下。"):t("附加错误日志已读出；原始数据如下。");
+  $("smart-log-raw").textContent=JSON.stringify(log.raw||{messages:log.messages},null,2);
   $("smart-updated").textContent=t("最近读取 {n}",{n:date(data.updated_at)});
   const label=$("health-label"); label.textContent={good:t("健康"),warning:t("需关注"),bad:t("异常"),unknown:t("未知")}[data.health]||t("未知"); label.className="health-label "+data.health;
   $("health-life").innerHTML=data.remaining===null?"—":`${numeric(data.remaining)}<small>%</small>`;
@@ -144,7 +150,13 @@ function renderSmart(data) {
   $("temperature-fill").style.background=data.temperature>=70?"#d49b63":"#7ab6a4";
   $("smart-model").dataset.verbatim=""; $("smart-model").textContent=data.model;
   if(!["Unknown model","未知型号"].includes(data.model) && $("smart-device").selectedOptions[0]) $("smart-device").selectedOptions[0].textContent=data.model+" · "+(data.protocol||"SMART");
-  $("smart-identity").innerHTML=[[t("序列号"),data.serial],[t("固件"),data.firmware],[t("接口"),data.protocol],[t("容量"),bytes(data.capacity)],[t("设备"),$("smart-device").value]].map(([key,value])=>`<dt>${key}</dt><dd>${escapeHTML(value)}</dd>`).join("");
+  const nand=data.nand||{};
+  const supplier=nand.supplier||(nand.status==="unavailable"?t("无法读取"):nand.status==="not_applicable"?t("不适用"):t("系统未公开"));
+  const identity=[[t("序列号"),data.serial],[t("固件"),data.firmware],[t("接口"),data.protocol],[t("容量"),bytes(data.capacity)],[t("NAND 供应商"),supplier]];
+  if(nand.reported_name)identity.push([t("供应商原始名称"),nand.reported_name],[t("信息来源"),nand.source]);
+  if(nand.nand_model)identity.push([t("NAND 型号"),nand.nand_model]);
+  identity.push([t("设备"),$("smart-device").value]);
+  $("smart-identity").innerHTML=identity.map(([key,value])=>`<dt>${key}</dt><dd>${escapeHTML(value)}</dd>`).join("");
   $("smart-usage").innerHTML=[[t("通电时间"),numeric(data.power_hours),t("小时")],[t("通电次数"),numeric(data.power_cycles),t("次")],[t("累计主机写入"),bytes(data.write_bytes),t("NVMe 数据单元换算")],[t("累计主机读取"),bytes(data.read_bytes),t("NVMe 数据单元换算")]].map(([label,value,unit])=>`<div class="panel usage-card"><span>${label}</span><strong>${escapeHTML(value)}</strong><small>${unit}</small></div>`).join("");
   $("smart-attributes").innerHTML=data.attributes.length?data.attributes.map(item=>`<tr class="${item.status=== "warning"?"warning":""}"><td>${escapeHTML(item.id)}</td><td>${escapeHTML(t(item.name))}</td><td>${escapeHTML(item.value)}</td><td>${escapeHTML(item.worst)}</td><td>${escapeHTML(item.threshold)}</td><td>${escapeHTML(item.raw??item.unit??"—")}</td></tr>`).join(""):"<tr><td colspan='6'>设备未报告 NVMe / ATA 属性，请查看原始 JSON。</td></tr>";
   $("smart-raw").textContent=JSON.stringify(data.raw,null,2);
@@ -192,7 +204,7 @@ function events() {
   $("scan-smart").addEventListener("click",()=>guarded($("scan-smart"),scanSmart));
   $("refresh-smart").addEventListener("click",()=>guarded($("refresh-smart"),readSmart));
   $("smart-device").addEventListener("change",()=>guarded($("refresh-smart"),readSmart));
-  $("export-smart").addEventListener("click",()=>{if(currentSmart) saveBlob(new Blob([JSON.stringify(currentSmart.raw,null,2)],{type:"application/json"}),"SSD-Lab-SMART.json");});
+  $("export-smart").addEventListener("click",()=>{if(currentSmart) saveBlob(new Blob([JSON.stringify({smartctl:currentSmart.raw,ssd_lab:{nand:currentSmart.nand,error_log:currentSmart.error_log}},null,2)],{type:"application/json"}),"SSD-Lab-SMART.json");});
   $("refresh-history").addEventListener("click",()=>guarded($("refresh-history"),loadHistory));
   $("save-settings").addEventListener("click",()=>guarded($("save-settings"),async()=>{const data=await api("settings",{fio_path:$("fio-path").value.trim(),smartctl_path:$("smartctl-path").value.trim()}); dependencyUI(data.dependencies); toast(t("工具配置已保存。")+(!data.dependencies.fio.available?" fio 尚未就绪。":"")); await poll();}));
   $("refresh-dependencies").addEventListener("click",()=>guarded($("refresh-dependencies"),async()=>{const data=await api("dependencies/refresh",{}); dependencyUI(data.dependencies); await poll(); toast(t("工具检测完成。"));}));

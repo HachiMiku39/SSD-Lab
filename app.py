@@ -29,9 +29,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from plot_logs import parse_logs, bound_series
+from apple_nand import apple_nand_info
 
 ROOT = Path(__file__).resolve().parent
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 PROFILES = {
     "standard": [
         {"id": "seq8", "label": "SEQ1M", "detail": "Q8T1", "bs": "1M", "depth": 8, "threads": 1, "random": False},
@@ -232,6 +233,8 @@ def smart_summary(raw, exit_code):
     partial = bool(exit_code & 7)
     if partial and not messages:
         messages.append("Some SMART commands failed; check permissions or USB bridge support.")
+    if not has_health and not messages:
+        messages.append("The device did not return SMART health data.")
     return {
         "model": raw.get("model_name") or raw.get("scsi_model_name") or raw.get("product") or "Unknown model",
         "serial": raw.get("serial_number"), "firmware": raw.get("firmware_version") or raw.get("revision"),
@@ -240,7 +243,7 @@ def smart_summary(raw, exit_code):
         "power_hours": power_hours, "power_cycles": power_cycles, "media_errors": media_errors,
         "read_bytes": read_units * 512000 if isinstance(read_units, (int, float)) else None,
         "write_bytes": write_units * 512000 if isinstance(write_units, (int, float)) else None,
-        "attributes": attributes, "messages": messages, "partial": partial,
+        "attributes": attributes, "messages": messages, "partial": partial, "health_data_available": has_health,
         "exit_code": exit_code, "raw": raw, "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -417,19 +420,38 @@ class Lab:
         return {"devices": list(found.values()), "messages": messages,
                 "warning": "No readable physical devices; administrator access may be needed or SMART may be unsupported." if not found else None}
 
-    def get_smart(self, name, elevated=False):
+    def get_smart(self, name, elevated=False, error_log=False):
+        if type(error_log) is not bool:
+            raise AppError("Invalid error log mode.")
         with self.lock:
             device = self.devices.get(name)
             dep = copy.deepcopy(self.dependencies["smartctl"])
         if not device or not dep["available"]:
             raise AppError("Scan devices first, then select a result.")
-        args = [dep["path"], "-a", "-j"]
+        # Health (NVMe log 0x02) is independent of the optional error log
+        # (0x01). -a requests both and some Apple controllers reject the latter.
+        args = [dep["path"], "-i", "-H", "-A", "-j"]
         if device.get("type"):
             args += ["-d", device["type"]]
         args += [device["name"]]
         raw, code = smart_command(args, elevated)
         # smartctl uses a bitmask: a nonzero status may contain valid health data.
-        return smart_summary(raw, code)
+        result = smart_summary(raw, code)
+        result["nand"] = apple_nand_info(name) if result["model"].upper().startswith("APPLE SSD") else {"status": "not_applicable", "supplier": None}
+        result["error_log"] = {"status": "not_requested"}
+        if error_log:
+            log_args = [dep["path"], "-l", "error", "-j"]
+            if device.get("type"):
+                log_args += ["-d", device["type"]]
+            log_args += [device["name"]]
+            try:
+                log, log_code = smart_command(log_args, elevated)
+                result["error_log"] = {"status": "failed" if log_code & 7 else "read",
+                                       "exit_code": log_code, "raw": log,
+                                       "messages": [item.get("string", "") for item in (log.get("smartctl") or {}).get("messages", [])]}
+            except AppError as exc:
+                result["error_log"] = {"status": "failed", "messages": [str(exc)]}
+        return result
 
     def validate_run(self, payload):
         path = payload.get("path")
@@ -884,7 +906,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/smart/scan":
                 result = lab.scan_smart(data.get("elevated", False))
             elif path == "/api/smart/read":
-                result = lab.get_smart(data.get("device"), data.get("elevated", False))
+                result = lab.get_smart(data.get("device"), data.get("elevated", False), data.get("error_log", False))
             elif path == "/api/pick-folder":
                 result = choose_directory()
             elif path == "/api/path-info":

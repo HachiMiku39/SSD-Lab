@@ -6,10 +6,11 @@ import tempfile
 import time
 import unittest
 import types
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+import apple_nand
 spec = importlib.util.spec_from_file_location("ssd_lab", ROOT / "app.py")
 lab_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(lab_module)
@@ -54,6 +55,20 @@ class ParserTests(unittest.TestCase):
     def test_nvme_critical_warning_takes_precedence(self):
         result = lab_module.smart_summary({"smart_status": {"passed": True}, "nvme_smart_health_information_log": {"critical_warning": 1}}, 0)
         self.assertEqual(result["health"], "warning")
+
+    def test_optional_error_log_failure_does_not_mean_failed_health(self):
+        result = lab_module.smart_summary({"smart_status": {"passed": True}, "nvme_smart_health_information_log": {
+            "critical_warning": 0, "media_errors": 0, "num_err_log_entries": 0}, "smartctl": {"messages": [{
+                "string": "Read 1 entries from Error Information Log failed: GetLogPage failed: system=0x38, sub=0x0, code=745"}]}}, 4)
+        self.assertEqual(result["health"], "good")
+        self.assertTrue(result["health_data_available"])
+        self.assertTrue(result["partial"])
+
+    def test_successful_command_without_health_is_unknown(self):
+        result = lab_module.smart_summary({"model_name": "SSD"}, 0)
+        self.assertEqual(result["health"], "unknown")
+        self.assertFalse(result["health_data_available"])
+        self.assertTrue(result["messages"])
 
     def test_used_over_100_is_clamped_and_warns(self):
         result = lab_module.smart_summary({"smart_status": {"passed": True}, "nvme_smart_health_information_log": {"percentage_used": 120}}, 0)
@@ -242,11 +257,110 @@ print(json.dumps({{"jobs":[job]}}))
         with self.assertRaises(lab_module.AppError):
             self.lab.get_smart("/dev/disk0; rm -rf /")
 
+    def configure_smart(self):
+        name = "IOService:/example/AppleANS3CGv2Controller/NS_01@1"
+        self.lab.devices = {name: {"name": name, "type": "nvme"}}
+        self.lab.dependencies["smartctl"] = {"available": True, "path": "/safe/smartctl"}
+        return name
+
+    def test_default_smart_reads_health_without_optional_logs(self):
+        name = self.configure_smart()
+        raw = {"model_name": "APPLE SSD AP1024Z", "smart_status": {"passed": True}}
+        with patch.object(lab_module, "smart_command", return_value=(raw, 0)) as runner, patch.object(lab_module, "apple_nand_info", return_value={"supplier": "Samsung"}) as nand:
+            result = self.lab.get_smart(name)
+        self.assertEqual(runner.call_args.args[0], ["/safe/smartctl", "-i", "-H", "-A", "-j", "-d", "nvme", name])
+        runner.assert_called_once()
+        nand.assert_called_once_with(name)
+        self.assertEqual(result["error_log"]["status"], "not_requested")
+
+    def test_error_log_failure_keeps_core_health_and_raw_diagnostics(self):
+        name = self.configure_smart()
+        raw = {"smart_status": {"passed": True}, "nvme_smart_health_information_log": {"critical_warning": 0}}
+        log = {"smartctl": {"messages": [{"string": "GetLogPage failed: code=745"}]}}
+        with patch.object(lab_module, "smart_command", side_effect=[(raw, 0), (log, 4)]) as runner:
+            result = self.lab.get_smart(name, error_log=True)
+        self.assertEqual(result["health"], "good")
+        self.assertFalse(result["partial"])
+        self.assertEqual(result["error_log"]["status"], "failed")
+        self.assertEqual(result["error_log"]["raw"], log)
+        self.assertEqual(runner.call_args.args[0], ["/safe/smartctl", "-l", "error", "-j", "-d", "nvme", name])
+
+    def test_successful_optional_log_cannot_override_bad_health(self):
+        name = self.configure_smart()
+        with patch.object(lab_module, "smart_command", side_effect=[({"smart_status": {"passed": False}}, 8), ({}, 0)]):
+            result = self.lab.get_smart(name, error_log=True)
+        self.assertEqual(result["health"], "bad")
+
+    def test_optional_log_cannot_supply_missing_core_health(self):
+        name = self.configure_smart()
+        with patch.object(lab_module, "smart_command", side_effect=[({}, 2), ({"smart_status": {"passed": True}}, 0)]):
+            result = self.lab.get_smart(name, error_log=True)
+        self.assertEqual(result["health"], "unknown")
+        self.assertTrue(result["partial"])
+
+    def test_error_log_option_rejects_non_boolean(self):
+        with self.assertRaises(lab_module.AppError):
+            self.lab.get_smart(self.configure_smart(), error_log="true")
+
     def test_fiona_is_not_accepted_as_fio(self):
         path = self.root / "not-fio"
         path.write_text(f'#!{sys.executable}\nprint("fio, version 1.10.1")\n')
         path.chmod(0o755)
         self.assertFalse(lab_module.dependency("fio", str(path))["available"])
+
+
+class AppleNandTests(unittest.TestCase):
+    def test_supplier_uses_exact_driver_field_and_preserves_original_name(self):
+        value = apple_nand.describe_nand({"vendor-name": b"Toshiba   \0", "nand-marketing-name": "nand-part ", "default-bits-per-cell": 3})
+        self.assertEqual(value["supplier"], "Toshiba / Kioxia")
+        self.assertEqual(value["reported_name"], "Toshiba")
+        self.assertEqual(value["nand_model"], "nand-part")
+        self.assertEqual(value["bits_per_cell"], 3)
+
+    def test_vendor_and_manufacturer_id_are_not_guessed(self):
+        value = apple_nand.describe_nand({"Vendor Name": "Apple", "manufacturer-id": b"\x98", "vendor-name": "  "})
+        self.assertEqual(value["status"], "not_exposed")
+        self.assertIsNone(value["supplier"])
+
+    def test_all_requested_suppliers_and_sandisk(self):
+        for raw, expected in {"Samsung": "Samsung", "Hynix": "SK hynix", "SKHYNIX": "SK hynix", "Micron": "Micron", "YMTC": "YMTC", "Sandisk": "SanDisk", "New vendor": "New vendor"}.items():
+            self.assertEqual(apple_nand.describe_nand({"vendor-name": raw})["supplier"], expected)
+
+    def fake_registry(self):
+        def parent(entry, plane, result):
+            result._obj.value = 22
+            return 0
+        def get_class(entry, buffer):
+            buffer.value = b"AppleANS3CGv2Controller"
+            return 0
+        return types.SimpleNamespace(IORegistryEntryFromPath=Mock(return_value=11), IOBSDNameMatching=Mock(return_value=55),
+            IOServiceGetMatchingService=Mock(return_value=11), IORegistryEntryGetParentEntry=Mock(side_effect=parent),
+            IOObjectGetClass=Mock(side_effect=get_class), IOObjectRelease=Mock())
+
+    def test_io_service_path_resolves_selected_device_and_parent_only(self):
+        io = self.fake_registry()
+        path = "IOService:/some/AppleANS3CGv2Controller/NS_01@1"
+        with patch.object(apple_nand.platform, "system", return_value="Darwin"), patch.object(apple_nand, "_frameworks", return_value=(io, None)), patch.object(apple_nand, "_read_property", side_effect=[None, {"vendor-name": "Micron"}]):
+            value = apple_nand.apple_nand_info(path)
+        io.IORegistryEntryFromPath.assert_called_once_with(0, path.encode())
+        io.IOBSDNameMatching.assert_not_called()
+        self.assertEqual([call.args[0] for call in io.IOObjectRelease.call_args_list], [11, 22])
+        self.assertEqual(value["supplier"], "Micron")
+        self.assertEqual(value["controller"], "AppleANS3CGv2Controller")
+
+    def test_bsd_matching_does_not_choose_another_controller(self):
+        io = self.fake_registry()
+        with patch.object(apple_nand.platform, "system", return_value="Darwin"), patch.object(apple_nand, "_frameworks", return_value=(io, None)), patch.object(apple_nand, "_read_property", return_value={"vendor-name": "Samsung"}):
+            value = apple_nand.apple_nand_info("/dev/rdisk7")
+        io.IOBSDNameMatching.assert_called_once_with(0, 0, b"disk7")
+        io.IORegistryEntryFromPath.assert_not_called()
+        io.IOServiceGetMatchingService.assert_called_once_with(0, 55)
+        self.assertEqual(value["supplier"], "Samsung")
+
+    def test_registry_access_failure_is_distinct_from_unreported_vendor(self):
+        with patch.object(apple_nand.platform, "system", return_value="Darwin"), patch.object(apple_nand, "_frameworks", side_effect=OSError("unavailable")):
+            self.assertEqual(apple_nand.apple_nand_info("/dev/disk0")["status"], "unavailable")
+        self.assertEqual(apple_nand.describe_nand({})["status"], "not_exposed")
 
 
 class PlotLogTests(unittest.TestCase):
